@@ -14,7 +14,7 @@ constexpr DigitalOutputDomain::DigitalOutput led3{ST_LIB::PB14};
 
 
 
-#define TEST_7
+#define TEST_0
 
 
 #ifdef TEST_0
@@ -52,7 +52,7 @@ int main(void) {
   auto &yellow_led = myBoard::instance_of<led2>();
   auto &gred_led = myBoard::instance_of<led3>();
 
-  [[maybe_unused]] auto my_buffer = myBoard::instance_of<my_uint32_t>().template as<uint32_t>();
+  [[maybe_unused]] auto my_buffer = myBoard::instance_of<my_uint32_t>().template as<my_uint32_t>();
 
   Time::register_low_precision_alarm(100, [&]() {
     green_led.toggle();
@@ -79,7 +79,7 @@ int main(void) {
   auto &yellow_led = myBoard::instance_of<led2>();
   auto &gred_led = myBoard::instance_of<led3>();
 
-  [[maybe_unused]] auto my_buffer = myBoard::instance_of<my_uint32_t>().template as<uint32_t>();
+  [[maybe_unused]] auto my_buffer = myBoard::instance_of<my_uint32_t>().template as<my_uint32_t>();
 
   Time::register_low_precision_alarm(100, [&]() {
     green_led.toggle();
@@ -107,7 +107,7 @@ int main(void) {
   auto &yellow_led = myBoard::instance_of<led2>();
   auto &gred_led = myBoard::instance_of<led3>();
 
-  [[maybe_unused]] auto my_buffer = myBoard::instance_of<my_buff>().template as<uint32_t>();
+  [[maybe_unused]] auto my_buffer = myBoard::instance_of<my_buff>().template as<my_buff>();
 
   Time::register_low_precision_alarm(100, [&]() {
     green_led.toggle();
@@ -136,7 +136,7 @@ int main(void) {
   auto &yellow_led = myBoard::instance_of<led2>();
   auto &gred_led = myBoard::instance_of<led3>();
 
-  [[maybe_unused]] auto my_buffer = myBoard::instance_of<my_buff>().template as<uint32_t[100000]>();
+  [[maybe_unused]] auto my_buffer = myBoard::instance_of<my_buff>().template as<my_buff>();
 
   Time::register_low_precision_alarm(100, [&]() {
     green_led.toggle();
@@ -153,7 +153,7 @@ int main(void) {
 #endif
 
 #ifdef TEST_5
-// Different sizes fail in runtime
+// Cannot request any type of buffer other than the one defined
 constexpr auto my_buff = MPUDomain::Buffer<uint32_t>();
 
 int main(void) {
@@ -165,7 +165,7 @@ int main(void) {
   auto &yellow_led = myBoard::instance_of<led2>();
   auto &gred_led = myBoard::instance_of<led3>();
 
-  [[maybe_unused]] auto my_buffer = myBoard::instance_of<my_buff>().template as<uint8_t>();
+  [[maybe_unused]] auto my_buffer = myBoard::instance_of<my_buff>().template as<uint32_t>();
 
   Time::register_low_precision_alarm(100, [&]() {
     green_led.toggle();
@@ -193,8 +193,8 @@ int main(void) {
   auto &yellow_led = myBoard::instance_of<led2>();
   auto &gred_led = myBoard::instance_of<led3>();
 
-  [[maybe_unused]] auto my_buffer = myBoard::instance_of<my_buff>().template as<uint32_t[100]>();
-  [[maybe_unused]] auto my_buffer2 = myBoard::instance_of<my_buff2>().template as<uint32_t[200]>();
+  [[maybe_unused]] auto my_buffer = myBoard::instance_of<my_buff>().template as<my_buff>();
+  [[maybe_unused]] auto my_buffer2 = myBoard::instance_of<my_buff2>().template as<my_buff2>();
 
   Time::register_low_precision_alarm(100, [&]() {
     green_led.toggle();
@@ -222,8 +222,35 @@ int main(void) {
   auto &yellow_led = myBoard::instance_of<led2>();
   auto &gred_led = myBoard::instance_of<led3>();
 
-  [[maybe_unused]] auto my_buffer = myBoard::instance_of<my_buff>().template as<uint8_t[100]>();
-  [[maybe_unused]] auto my_buffer2 = myBoard::instance_of<my_buff2>().template as<uint32_t[200]>();
+  [[maybe_unused]] auto my_buffer = myBoard::instance_of<my_buff>().template as<my_buff>();
+  [[maybe_unused]] auto my_buffer2 = myBoard::instance_of<my_buff2>().template as<my_buff2>();
+
+  Time::register_low_precision_alarm(100, [&]() {
+    green_led.toggle();
+    yellow_led.toggle();
+    gred_led.toggle();
+  });
+
+  while (1) {
+    STLIB::update();
+  }
+}
+#endif
+
+#ifdef TEST_8
+// Request a non-POD type fails
+constexpr auto my_buff = MPUDomain::Buffer<std::vector<int>>();
+
+int main(void) {
+  STLIB::start();
+
+  using myBoard = ST_LIB::Board<led1, led2, led3, my_buff>;
+  myBoard::init();
+  auto &green_led = myBoard::instance_of<led1>();
+  auto &yellow_led = myBoard::instance_of<led2>();
+  auto &gred_led = myBoard::instance_of<led3>();
+
+  [[maybe_unused]] auto my_buffer = myBoard::instance_of<my_buff>().template as<my_buff>();
 
   Time::register_low_precision_alarm(100, [&]() {
     green_led.toggle();
