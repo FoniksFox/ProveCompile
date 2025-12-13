@@ -14,7 +14,7 @@ constexpr DigitalOutputDomain::DigitalOutput led3{ST_LIB::PB14};
 
 
 
-#define TEST_14
+#define TEST_0
 
 
 #ifdef TEST_0
@@ -478,6 +478,33 @@ int main(void) {
   auto &gred_led = myBoard::instance_of<led3>();
 
   [[maybe_unused]] auto my_buff = MPUManager::allocate_non_cached_memory(256);
+
+  Time::register_low_precision_alarm(100, [&]() {
+    green_led.toggle();
+    yellow_led.toggle();
+    gred_led.toggle();
+  });
+
+  while (1) {
+    STLIB::update();
+  }
+}
+#endif
+
+#ifdef TEST_15
+// Dereference a nullptr (should compile fine, runtime error)
+int main(void) {
+  STLIB::start();
+
+  using myBoard = ST_LIB::Board<led1, led2, led3>;
+  myBoard::init();
+  auto &green_led = myBoard::instance_of<led1>();
+  auto &yellow_led = myBoard::instance_of<led2>();
+  auto &gred_led = myBoard::instance_of<led3>();
+
+  volatile uint32_t* invalid_ptr = nullptr; // Null pointer
+
+  [[maybe_unused]] uint32_t value = *invalid_ptr; // Dereference
 
   Time::register_low_precision_alarm(100, [&]() {
     green_led.toggle();
