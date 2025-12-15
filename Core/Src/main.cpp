@@ -14,20 +14,19 @@ constexpr DigitalOutputDomain::DigitalOutput led3{ST_LIB::PB14};
 
 
 
-#define TEST_0
+#define TEST_6
 
 
 #ifdef TEST_0
-// No Buffers requested
+// No packet, just test that it doesn't break anything
 int main(void) {
   STLIB::start();
-
   using myBoard = ST_LIB::Board<led1, led2, led3>;
   myBoard::init();
   auto &green_led = myBoard::instance_of<led1>();
   auto &yellow_led = myBoard::instance_of<led2>();
   auto &gred_led = myBoard::instance_of<led3>();
-
+  
   Time::register_low_precision_alarm(100, [&]() {
     green_led.toggle();
     yellow_led.toggle();
@@ -41,19 +40,34 @@ int main(void) {
 #endif
 
 #ifdef TEST_1
-// Basic test with a buffer in D2
-constexpr auto my_uint32_t = MPUDomain::Buffer<uint32_t>();
+// 1 packet with 1 variable
+constexpr auto my_packet_req = MdmaPacketDomain::MdmaPacket<uint16_t>::Request{};
+constexpr auto to_build_buffer_req = MPUDomain::Buffer<uint8_t[4]>(
+    MPUDomain::MemoryType::NonCached, MPUDomain::MemoryDomain::D1);
+constexpr auto my_value_req = MPUDomain::Buffer<uint16_t>(
+    MPUDomain::MemoryType::NonCached, MPUDomain::MemoryDomain::D1);
 
 int main(void) {
   STLIB::start();
 
-  using myBoard = ST_LIB::Board<led1, led2, led3, my_uint32_t>;
+  using myBoard = ST_LIB::Board<led1, led2, led3, my_packet_req, to_build_buffer_req, my_value_req>;
   myBoard::init();
+
   auto &green_led = myBoard::instance_of<led1>();
   auto &yellow_led = myBoard::instance_of<led2>();
   auto &gred_led = myBoard::instance_of<led3>();
 
-  [[maybe_unused]] auto my_buffer = myBoard::instance_of<my_uint32_t>().template as<my_uint32_t>();
+  auto my_value = myBoard::instance_of<my_value_req>().as<my_value_req>();
+  *my_value = 0xABCD;
+  [[maybe_unused]] auto my_packet = MdmaPacketDomain::MdmaPacket<uint16_t>(myBoard::instance_of<my_packet_req>(), 0x01, my_value);
+
+  [[maybe_unused]] auto to_build_buffer =
+      myBoard::instance_of<to_build_buffer_req>().as<to_build_buffer_req>();
+
+  bool flag = false;
+  my_packet.build(&flag
+    , reinterpret_cast<uint8_t*>(to_build_buffer)
+  );
 
   Time::register_low_precision_alarm(100, [&]() {
     green_led.toggle();
@@ -63,24 +77,36 @@ int main(void) {
 
   while (1) {
     STLIB::update();
+    if (flag) {
+      flag = false;
+    }
   }
 }
 #endif
 
 #ifdef TEST_2
-// Basic test with a buffer in D1
-constexpr auto my_uint32_t = MPUDomain::Buffer<uint32_t>(MPUDomain::MemoryType::NonCached, MPUDomain::MemoryDomain::D1);
+// Packet with uint8_t, external destination in D2 (larger buffer than packet)
+constexpr auto my_packet2_req = MdmaPacketDomain::MdmaPacket<uint8_t>::Request{};
+constexpr auto to_build_buffer2_req = MPUDomain::Buffer<uint8_t[8]>(
+    MPUDomain::MemoryType::NonCached, MPUDomain::MemoryDomain::D2);
 
 int main(void) {
   STLIB::start();
 
-  using myBoard = ST_LIB::Board<led1, led2, led3, my_uint32_t>;
+  using myBoard = ST_LIB::Board<led1, led2, led3, my_packet2_req, to_build_buffer2_req>;
   myBoard::init();
+
   auto &green_led = myBoard::instance_of<led1>();
   auto &yellow_led = myBoard::instance_of<led2>();
   auto &gred_led = myBoard::instance_of<led3>();
 
-  [[maybe_unused]] auto my_buffer = myBoard::instance_of<my_uint32_t>().template as<my_uint32_t>();
+  uint8_t my_value = 0x7E;
+  [[maybe_unused]] auto my_packet = MdmaPacketDomain::MdmaPacket<uint8_t>(myBoard::instance_of<my_packet2_req>(), 0x10, &my_value);
+
+  [[maybe_unused]] auto to_build_buffer2 = myBoard::instance_of<to_build_buffer2_req>().as<to_build_buffer2_req>();
+
+  bool flag2 = false;
+  my_packet.build(&flag2, reinterpret_cast<uint8_t*>(to_build_buffer2));
 
   Time::register_low_precision_alarm(100, [&]() {
     green_led.toggle();
@@ -88,35 +114,46 @@ int main(void) {
     gred_led.toggle();
   });
 
-
   while (1) {
     STLIB::update();
+    if (flag2) {
+      flag2 = false;
+    }
   }
 }
 #endif
 
 #ifdef TEST_3
-// Basic test with a buffer in D3
-constexpr auto my_buff = MPUDomain::Buffer<uint32_t>(MPUDomain::MemoryType::NonCached, MPUDomain::MemoryDomain::D3);
+// Packet with two variables (uint8_t, uint16_t) built into internal buffer
+constexpr auto my_packet3_req = MdmaPacketDomain::MdmaPacket<uint8_t, uint16_t>::Request{};
+constexpr auto val1_req = MPUDomain::Buffer<uint8_t>(MPUDomain::MemoryType::NonCached, MPUDomain::MemoryDomain::D1);
+constexpr auto val2_req = MPUDomain::Buffer<uint16_t>(MPUDomain::MemoryType::NonCached, MPUDomain::MemoryDomain::D1);
 
 int main(void) {
   STLIB::start();
 
-  using myBoard = ST_LIB::Board<led1, led2, led3, my_buff>;
+  using myBoard = ST_LIB::Board<led1, led2, led3, my_packet3_req, val1_req, val2_req>;
   myBoard::init();
+
   auto &green_led = myBoard::instance_of<led1>();
   auto &yellow_led = myBoard::instance_of<led2>();
   auto &gred_led = myBoard::instance_of<led3>();
 
-  [[maybe_unused]] auto my_buffer = myBoard::instance_of<my_buff>().template as<my_buff>();
+  auto v1 = myBoard::instance_of<val1_req>().as<val1_req>();
+  auto v2 = myBoard::instance_of<val2_req>().as<val2_req>();
+  *v1 = 0x5A;
+  *v2 = 0x1234;
+
+  [[maybe_unused]] auto my_packet = MdmaPacketDomain::MdmaPacket<uint8_t, uint16_t>(myBoard::instance_of<my_packet3_req>(), 0x20, v1, v2);
+
+  // Build into internal buffer
+  my_packet.build();
 
   Time::register_low_precision_alarm(100, [&]() {
     green_led.toggle();
     yellow_led.toggle();
     gred_led.toggle();
   });
-
-
 
   while (1) {
     STLIB::update();
@@ -125,27 +162,41 @@ int main(void) {
 #endif
 
 #ifdef TEST_4
-// Fail test (too much memory requested)
-constexpr auto my_buff = MPUDomain::Buffer<uint32_t[100000]>(MPUDomain::MemoryType::NonCached, MPUDomain::MemoryDomain::D3);
+// Two packets built sequentially to the same external D1 buffer
+constexpr auto p1_req = MdmaPacketDomain::MdmaPacket<uint8_t>::Request{};
+constexpr auto p2_req = MdmaPacketDomain::MdmaPacket<uint16_t>::Request{};
+constexpr auto shared_buf_req = MPUDomain::Buffer<uint8_t[16]>(MPUDomain::MemoryType::NonCached, MPUDomain::MemoryDomain::D1);
 
 int main(void) {
-  
+  STLIB::start();
 
-  using myBoard = ST_LIB::Board<led1, led2, led3, my_buff>;
+  using myBoard = ST_LIB::Board<led1, led2, led3, p1_req, p2_req, shared_buf_req>;
   myBoard::init();
+
   auto &green_led = myBoard::instance_of<led1>();
   auto &yellow_led = myBoard::instance_of<led2>();
   auto &gred_led = myBoard::instance_of<led3>();
 
-  [[maybe_unused]] auto my_buffer = myBoard::instance_of<my_buff>().template as<my_buff>();
+  uint8_t v1 = 0xAA;
+  uint16_t v2 = 0xBEEF;
+
+  [[maybe_unused]] auto packet1 = MdmaPacketDomain::MdmaPacket<uint8_t>(myBoard::instance_of<p1_req>(), 0x31, &v1);
+  [[maybe_unused]] auto packet2 = MdmaPacketDomain::MdmaPacket<uint16_t>(myBoard::instance_of<p2_req>(), 0x32, &v2);
+
+  [[maybe_unused]] auto shared_buf = myBoard::instance_of<shared_buf_req>().as<shared_buf_req>();
+
+  bool f1 = false;
+  bool f2 = false;
+  packet1.build(&f1, reinterpret_cast<uint8_t*>(shared_buf));
+  while (!f1) { STLIB::update(); }
+  packet2.build(&f2, reinterpret_cast<uint8_t*>(shared_buf));
+  while (!f2) { STLIB::update(); }
 
   Time::register_low_precision_alarm(100, [&]() {
     green_led.toggle();
     yellow_led.toggle();
     gred_led.toggle();
   });
-
-  STLIB::start();
 
   while (1) {
     STLIB::update();
@@ -154,19 +205,35 @@ int main(void) {
 #endif
 
 #ifdef TEST_5
-// Cannot request any type of buffer other than the one defined
-constexpr auto my_buff = MPUDomain::Buffer<uint32_t>();
+// Parse test 1: build from internal buffer, parse into separate non-cached destination
+constexpr auto parse_src_packet_req = MdmaPacketDomain::MdmaPacket<uint16_t>::Request{};
+constexpr auto parse_dst_packet_req = MdmaPacketDomain::MdmaPacket<uint16_t>::Request{};
+constexpr auto parse_src_val_req = MPUDomain::Buffer<uint16_t>(MPUDomain::MemoryType::NonCached, MPUDomain::MemoryDomain::D1);
+constexpr auto parse_dst_val_req = MPUDomain::Buffer<uint16_t>(MPUDomain::MemoryType::NonCached, MPUDomain::MemoryDomain::D1);
 
 int main(void) {
   STLIB::start();
 
-  using myBoard = ST_LIB::Board<led1, led2, led3, my_buff>;
+  using myBoard = ST_LIB::Board<led1, led2, led3, parse_src_packet_req, parse_dst_packet_req, parse_src_val_req, parse_dst_val_req>;
   myBoard::init();
+
   auto &green_led = myBoard::instance_of<led1>();
   auto &yellow_led = myBoard::instance_of<led2>();
   auto &gred_led = myBoard::instance_of<led3>();
 
-  [[maybe_unused]] auto my_buffer = myBoard::instance_of<my_buff>().template as<uint32_t>();
+  auto src_val = myBoard::instance_of<parse_src_val_req>().as<parse_src_val_req>();
+  auto dst_val = myBoard::instance_of<parse_dst_val_req>().as<parse_dst_val_req>();
+  *src_val = 0x4242;
+  *dst_val = 0x0;
+
+  // Packet A: built from src_val into internal buffer
+  [[maybe_unused]] auto packetA = MdmaPacketDomain::MdmaPacket<uint16_t>(myBoard::instance_of<parse_src_packet_req>(), 0x41, src_val);
+  packetA.build();
+
+  // Packet B: will parse into dst_val from packetA.buffer
+  [[maybe_unused]] auto packetB = MdmaPacketDomain::MdmaPacket<uint16_t>(myBoard::instance_of<parse_dst_packet_req>(), 0x42, dst_val);
+  // Blocking parse
+  packetB.parse(packetA.buffer);
 
   Time::register_low_precision_alarm(100, [&]() {
     green_led.toggle();
@@ -181,21 +248,45 @@ int main(void) {
 #endif
 
 #ifdef TEST_6
-// Ask for non-cached and cached memory on the same domain
-constexpr auto my_buff = MPUDomain::Buffer<uint32_t[100]>();
-constexpr auto my_buff2 = MPUDomain::Buffer<uint32_t[200]>(MPUDomain::MemoryType::Cached);
+// Parse test 2: build into external non-cached buffer, then parse from that external buffer
+constexpr auto parse_src_packet2_req = MdmaPacketDomain::MdmaPacket<uint8_t, uint16_t>::Request{};
+constexpr auto parse_dst_packet2_req = MdmaPacketDomain::MdmaPacket<uint8_t, uint16_t>::Request{};
+constexpr auto parse_src1_req = MPUDomain::Buffer<uint8_t>(MPUDomain::MemoryType::NonCached, MPUDomain::MemoryDomain::D1);
+constexpr auto parse_src2_req = MPUDomain::Buffer<uint16_t>(MPUDomain::MemoryType::NonCached, MPUDomain::MemoryDomain::D1);
+constexpr auto parse_dst1_req = MPUDomain::Buffer<uint8_t>(MPUDomain::MemoryType::NonCached, MPUDomain::MemoryDomain::D1);
+constexpr auto parse_dst2_req = MPUDomain::Buffer<uint16_t>(MPUDomain::MemoryType::NonCached, MPUDomain::MemoryDomain::D1);
 
 int main(void) {
   STLIB::start();
 
-  using myBoard = ST_LIB::Board<led1, led2, led3, my_buff, my_buff2>;
+  using myBoard = ST_LIB::Board<led1, led2, led3, parse_src_packet2_req, parse_dst_packet2_req, parse_src1_req, parse_src2_req, parse_dst1_req, parse_dst2_req>;
   myBoard::init();
+
   auto &green_led = myBoard::instance_of<led1>();
   auto &yellow_led = myBoard::instance_of<led2>();
   auto &gred_led = myBoard::instance_of<led3>();
 
-  [[maybe_unused]] auto my_buffer = myBoard::instance_of<my_buff>().template as<my_buff>();
-  [[maybe_unused]] auto my_buffer2 = myBoard::instance_of<my_buff2>().template as<my_buff2>();
+  auto s1 = myBoard::instance_of<parse_src1_req>().as<parse_src1_req>();
+  auto s2 = myBoard::instance_of<parse_src2_req>().as<parse_src2_req>();
+  auto d1 = myBoard::instance_of<parse_dst1_req>().as<parse_dst1_req>();
+  auto d2 = myBoard::instance_of<parse_dst2_req>().as<parse_dst2_req>();
+
+  *s1 = 0x0A;
+  *s2 = 0x55AA;
+  *d1 = 0;
+  *d2 = 0;
+
+  // Build packet into external buffer using packetA
+  [[maybe_unused]] auto packetA = MdmaPacketDomain::MdmaPacket<uint8_t, uint16_t>(myBoard::instance_of<parse_src_packet2_req>(), 0x51, s1, s2);
+  // allocate external via MPUManager and build into it
+  void* ext = MPUManager::allocate_non_cached_memory(static_cast<uint32_t>(packetA.get_size()));
+  bool done = false;
+  packetA.build(&done, reinterpret_cast<uint8_t*>(ext));
+  while (!done) { STLIB::update(); }
+
+  // Packet B: parse from external buffer into d1,d2
+  [[maybe_unused]] auto packetB = MdmaPacketDomain::MdmaPacket<uint8_t, uint16_t>(myBoard::instance_of<parse_dst_packet2_req>(), 0x52, d1, d2);
+  packetB.parse(reinterpret_cast<uint8_t*>(ext));
 
   Time::register_low_precision_alarm(100, [&]() {
     green_led.toggle();
@@ -209,314 +300,6 @@ int main(void) {
 }
 #endif
 
-#ifdef TEST_7
-// Ask for different alignment buffers
-constexpr auto my_buff = MPUDomain::Buffer<uint8_t[100]>();
-constexpr auto my_buff2 = MPUDomain::Buffer<uint32_t[200]>();
-
-int main(void) {
-  STLIB::start();
-
-  using myBoard = ST_LIB::Board<led1, led2, led3, my_buff, my_buff2>;
-  myBoard::init();
-  auto &green_led = myBoard::instance_of<led1>();
-  auto &yellow_led = myBoard::instance_of<led2>();
-  auto &gred_led = myBoard::instance_of<led3>();
-
-  [[maybe_unused]] auto my_buffer = myBoard::instance_of<my_buff>().template as<my_buff>();
-  [[maybe_unused]] auto my_buffer2 = myBoard::instance_of<my_buff2>().template as<my_buff2>();
-
-  Time::register_low_precision_alarm(100, [&]() {
-    green_led.toggle();
-    yellow_led.toggle();
-    gred_led.toggle();
-  });
-
-  while (1) {
-    STLIB::update();
-  }
-}
-#endif
-
-#ifdef TEST_8
-// Request a non-POD type fails
-constexpr auto my_buff = MPUDomain::Buffer<std::vector<int>>();
-
-int main(void) {
-  STLIB::start();
-
-  using myBoard = ST_LIB::Board<led1, led2, led3, my_buff>;
-  myBoard::init();
-  auto &green_led = myBoard::instance_of<led1>();
-  auto &yellow_led = myBoard::instance_of<led2>();
-  auto &gred_led = myBoard::instance_of<led3>();
-
-  [[maybe_unused]] auto my_buffer = myBoard::instance_of<my_buff>().template as<my_buff>();
-
-  Time::register_low_precision_alarm(100, [&]() {
-    green_led.toggle();
-    yellow_led.toggle();
-    gred_led.toggle();
-  });
-
-  while (1) {
-    STLIB::update();
-  }
-}
-#endif
-
-#ifdef TEST_9
-// Request too many buffers fails (you can overwrite this value with a define)
-constexpr auto my_buff = MPUDomain::Buffer<uint8_t>(); constexpr auto my_buff2 = MPUDomain::Buffer<uint8_t>(); constexpr auto my_buff3 = MPUDomain::Buffer<uint8_t>(); constexpr auto my_buff4 = MPUDomain::Buffer<uint8_t>(); constexpr auto my_buff5 = MPUDomain::Buffer<uint8_t>();
-constexpr auto my_buff6 = MPUDomain::Buffer<uint8_t>(); constexpr auto my_buff7 = MPUDomain::Buffer<uint8_t>(); constexpr auto my_buff8 = MPUDomain::Buffer<uint8_t>(); constexpr auto my_buff9 = MPUDomain::Buffer<uint8_t>(); constexpr auto my_buff10 = MPUDomain::Buffer<uint8_t>();
-constexpr auto my_buff11 = MPUDomain::Buffer<uint8_t>(); constexpr auto my_buff12 = MPUDomain::Buffer<uint8_t>(); constexpr auto my_buff13 = MPUDomain::Buffer<uint8_t>(); constexpr auto my_buff14 = MPUDomain::Buffer<uint8_t>(); constexpr auto my_buff15 = MPUDomain::Buffer<uint8_t>();
-constexpr auto my_buff16 = MPUDomain::Buffer<uint8_t>(); constexpr auto my_buff17 = MPUDomain::Buffer<uint8_t>(); constexpr auto my_buff18 = MPUDomain::Buffer<uint8_t>(); constexpr auto my_buff19 = MPUDomain::Buffer<uint8_t>(); constexpr auto my_buff20 = MPUDomain::Buffer<uint8_t>();
-constexpr auto my_buff21 = MPUDomain::Buffer<uint8_t>(); constexpr auto my_buff22 = MPUDomain::Buffer<uint8_t>(); constexpr auto my_buff23 = MPUDomain::Buffer<uint8_t>(); constexpr auto my_buff24 = MPUDomain::Buffer<uint8_t>(); constexpr auto my_buff25 = MPUDomain::Buffer<uint8_t>();
-constexpr auto my_buff26 = MPUDomain::Buffer<uint8_t>(); constexpr auto my_buff27 = MPUDomain::Buffer<uint8_t>(); constexpr auto my_buff28 = MPUDomain::Buffer<uint8_t>(); constexpr auto my_buff29 = MPUDomain::Buffer<uint8_t>(); constexpr auto my_buff30 = MPUDomain::Buffer<uint8_t>();
-constexpr auto my_buff31 = MPUDomain::Buffer<uint8_t>(); constexpr auto my_buff32 = MPUDomain::Buffer<uint8_t>(); constexpr auto my_buff33 = MPUDomain::Buffer<uint8_t>(); constexpr auto my_buff34 = MPUDomain::Buffer<uint8_t>(); constexpr auto my_buff35 = MPUDomain::Buffer<uint8_t>();
-constexpr auto my_buff36 = MPUDomain::Buffer<uint8_t>(); constexpr auto my_buff37 = MPUDomain::Buffer<uint8_t>(); constexpr auto my_buff38 = MPUDomain::Buffer<uint8_t>(); constexpr auto my_buff39 = MPUDomain::Buffer<uint8_t>(); constexpr auto my_buff40 = MPUDomain::Buffer<uint8_t>();
-constexpr auto my_buff41 = MPUDomain::Buffer<uint8_t>(); constexpr auto my_buff42 = MPUDomain::Buffer<uint8_t>(); constexpr auto my_buff43 = MPUDomain::Buffer<uint8_t>(); constexpr auto my_buff44 = MPUDomain::Buffer<uint8_t>(); constexpr auto my_buff45 = MPUDomain::Buffer<uint8_t>();
-constexpr auto my_buff46 = MPUDomain::Buffer<uint8_t>(); constexpr auto my_buff47 = MPUDomain::Buffer<uint8_t>(); constexpr auto my_buff48 = MPUDomain::Buffer<uint8_t>(); constexpr auto my_buff49 = MPUDomain::Buffer<uint8_t>(); constexpr auto my_buff50 = MPUDomain::Buffer<uint8_t>();
-constexpr auto my_buff51 = MPUDomain::Buffer<uint8_t>(); constexpr auto my_buff52 = MPUDomain::Buffer<uint8_t>(); constexpr auto my_buff53 = MPUDomain::Buffer<uint8_t>(); constexpr auto my_buff54 = MPUDomain::Buffer<uint8_t>(); constexpr auto my_buff55 = MPUDomain::Buffer<uint8_t>();
-constexpr auto my_buff56 = MPUDomain::Buffer<uint8_t>(); constexpr auto my_buff57 = MPUDomain::Buffer<uint8_t>(); constexpr auto my_buff58 = MPUDomain::Buffer<uint8_t>(); constexpr auto my_buff59 = MPUDomain::Buffer<uint8_t>(); constexpr auto my_buff60 = MPUDomain::Buffer<uint8_t>();
-constexpr auto my_buff61 = MPUDomain::Buffer<uint8_t>(); constexpr auto my_buff62 = MPUDomain::Buffer<uint8_t>(); constexpr auto my_buff63 = MPUDomain::Buffer<uint8_t>(); constexpr auto my_buff64 = MPUDomain::Buffer<uint8_t>(); constexpr auto my_buff65 = MPUDomain::Buffer<uint8_t>();
-constexpr auto my_buff66 = MPUDomain::Buffer<uint8_t>(); constexpr auto my_buff67 = MPUDomain::Buffer<uint8_t>(); constexpr auto my_buff68 = MPUDomain::Buffer<uint8_t>(); constexpr auto my_buff69 = MPUDomain::Buffer<uint8_t>(); constexpr auto my_buff70 = MPUDomain::Buffer<uint8_t>();
-constexpr auto my_buff71 = MPUDomain::Buffer<uint8_t>(); constexpr auto my_buff72 = MPUDomain::Buffer<uint8_t>(); constexpr auto my_buff73 = MPUDomain::Buffer<uint8_t>(); constexpr auto my_buff74 = MPUDomain::Buffer<uint8_t>(); constexpr auto my_buff75 = MPUDomain::Buffer<uint8_t>();
-constexpr auto my_buff76 = MPUDomain::Buffer<uint8_t>(); constexpr auto my_buff77 = MPUDomain::Buffer<uint8_t>(); constexpr auto my_buff78 = MPUDomain::Buffer<uint8_t>(); constexpr auto my_buff79 = MPUDomain::Buffer<uint8_t>(); constexpr auto my_buff80 = MPUDomain::Buffer<uint8_t>();
-constexpr auto my_buff81 = MPUDomain::Buffer<uint8_t>(); constexpr auto my_buff82 = MPUDomain::Buffer<uint8_t>(); constexpr auto my_buff83 = MPUDomain::Buffer<uint8_t>(); constexpr auto my_buff84 = MPUDomain::Buffer<uint8_t>(); constexpr auto my_buff85 = MPUDomain::Buffer<uint8_t>();
-constexpr auto my_buff86 = MPUDomain::Buffer<uint8_t>(); constexpr auto my_buff87 = MPUDomain::Buffer<uint8_t>(); constexpr auto my_buff88 = MPUDomain::Buffer<uint8_t>(); constexpr auto my_buff89 = MPUDomain::Buffer<uint8_t>(); constexpr auto my_buff90 = MPUDomain::Buffer<uint8_t>();
-constexpr auto my_buff91 = MPUDomain::Buffer<uint8_t>(); constexpr auto my_buff92 = MPUDomain::Buffer<uint8_t>(); constexpr auto my_buff93 = MPUDomain::Buffer<uint8_t>(); constexpr auto my_buff94 = MPUDomain::Buffer<uint8_t>(); constexpr auto my_buff95 = MPUDomain::Buffer<uint8_t>();
-constexpr auto my_buff96 = MPUDomain::Buffer<uint8_t>(); constexpr auto my_buff97 = MPUDomain::Buffer<uint8_t>(); constexpr auto my_buff98 = MPUDomain::Buffer<uint8_t>(); constexpr auto my_buff99 = MPUDomain::Buffer<uint8_t>(); constexpr auto my_buff100 = MPUDomain::Buffer<uint8_t>();
-constexpr auto my_buff101 = MPUDomain::Buffer<uint8_t>();
-int main(void) {
-  STLIB::start();
-
-  using myBoard = ST_LIB::Board<led1, led2, led3,
-                                my_buff, my_buff2, my_buff3, my_buff4, my_buff5,
-                                my_buff6, my_buff7, my_buff8, my_buff9, my_buff10,
-                                my_buff11, my_buff12, my_buff13, my_buff14, my_buff15,
-                                my_buff16, my_buff17, my_buff18, my_buff19, my_buff20,
-                                my_buff21, my_buff22, my_buff23, my_buff24, my_buff25,
-                                my_buff26, my_buff27, my_buff28, my_buff29, my_buff30,
-                                my_buff31, my_buff32, my_buff33, my_buff34, my_buff35,
-                                my_buff36, my_buff37, my_buff38, my_buff39, my_buff40,
-                                my_buff41, my_buff42, my_buff43, my_buff44, my_buff45,
-                                my_buff46, my_buff47, my_buff48, my_buff49, my_buff50,
-                                my_buff51, my_buff52, my_buff53, my_buff54, my_buff55,
-                                my_buff56, my_buff57, my_buff58, my_buff59, my_buff60,
-                                my_buff61, my_buff62, my_buff63, my_buff64, my_buff65,
-                                my_buff66, my_buff67, my_buff68, my_buff69, my_buff70,
-                                my_buff71, my_buff72, my_buff73, my_buff74, my_buff75,
-                                my_buff76, my_buff77, my_buff78, my_buff79, my_buff80,
-                                my_buff81, my_buff82, my_buff83, my_buff84, my_buff85,
-                                my_buff86, my_buff87, my_buff88, my_buff89, my_buff90,
-                                my_buff91, my_buff92, my_buff93, my_buff94, my_buff95,
-                                my_buff96, my_buff97, my_buff98, my_buff99, my_buff100,
-                                my_buff101>;
-  myBoard::init();
-  auto &green_led = myBoard::instance_of<led1>();
-  auto &yellow_led = myBoard::instance_of<led2>();
-  auto &gred_led = myBoard::instance_of<led3>();
-
-  [[maybe_unused]] auto my_buffer = myBoard::instance_of<my_buff>().template as<my_buff>();
-
-  Time::register_low_precision_alarm(100, [&]() {
-    green_led.toggle();
-    yellow_led.toggle();
-    gred_led.toggle();
-  });
-
-  while (1) {
-    STLIB::update();
-  }
-}
-#endif
-
-#ifdef TEST_10
-// Request a struct type (also works with objects and such, as long as they are POD)
-struct MyStruct {
-  uint8_t a;
-  float b;
-  char c[10];
-};
-constexpr auto my_buff = MPUDomain::Buffer<MyStruct>();
-
-int main(void) {
-  STLIB::start();
-
-  using myBoard = ST_LIB::Board<led1, led2, led3, my_buff>;
-  myBoard::init();
-  auto &green_led = myBoard::instance_of<led1>();
-  auto &yellow_led = myBoard::instance_of<led2>();
-  auto &gred_led = myBoard::instance_of<led3>();
-
-  [[maybe_unused]] auto my_buffer = myBoard::instance_of<my_buff>().template as<my_buff>();
-
-  Time::register_low_precision_alarm(100, [&]() {
-    green_led.toggle();
-    yellow_led.toggle();
-    gred_led.toggle();
-  });
-
-  while (1) {
-    STLIB::update();
-  }
-}
-#endif
-
-#ifdef TEST_11
-// Mix types of different alignments and sizes (stress test)
-constexpr auto my_buff = MPUDomain::Buffer<uint8_t[3]>();
-constexpr auto my_buff2 = MPUDomain::Buffer<uint16_t[5]>();
-constexpr auto my_buff3 = MPUDomain::Buffer<uint32_t>();
-constexpr auto my_buff4 = MPUDomain::Buffer<uint64_t[2]>();
-constexpr auto my_buff5 = MPUDomain::Buffer<uint32_t>(MPUDomain::MemoryType::Cached);
-constexpr auto my_buff6 = MPUDomain::Buffer<uint8_t[7]>(MPUDomain::MemoryType::Cached);
-constexpr auto my_buff7 = MPUDomain::Buffer<uint16_t>(MPUDomain::MemoryType::Cached);
-constexpr auto my_buff8 = MPUDomain::Buffer<uint32_t[3]>(MPUDomain::MemoryType::Cached, MPUDomain::MemoryDomain::D2, true);
-
-int main(void) {
-  STLIB::start();
-
-  using myBoard = ST_LIB::Board<led1, led2, led3, my_buff, my_buff2, my_buff3, my_buff4,
-                                my_buff5, my_buff6, my_buff7, my_buff8>;
-  myBoard::init();
-  auto &green_led = myBoard::instance_of<led1>();
-  auto &yellow_led = myBoard::instance_of<led2>();
-  auto &gred_led = myBoard::instance_of<led3>();
-
-  [[maybe_unused]] auto my_buffer = myBoard::instance_of<my_buff>().template as<my_buff>();
-  [[maybe_unused]] auto my_buffer2 = myBoard::instance_of<my_buff2>().template as<my_buff2>();
-  [[maybe_unused]] auto my_buffer3 = myBoard::instance_of<my_buff3>().template as<my_buff3>();
-  [[maybe_unused]] auto my_buffer4 = myBoard::instance_of<my_buff4>().template as<my_buff4>();
-  [[maybe_unused]] auto my_buffer5 = myBoard::instance_of<my_buff5>().template as<my_buff5>();
-  [[maybe_unused]] auto my_buffer6 = myBoard::instance_of<my_buff6>().template as<my_buff6>();
-  [[maybe_unused]] auto my_buffer7 = myBoard::instance_of<my_buff7>().template as<my_buff7>();
-  [[maybe_unused]] auto my_buffer8 = myBoard::instance_of<my_buff8>().template as<my_buff8>();
-
-  Time::register_low_precision_alarm(100, [&]() {
-    green_led.toggle();
-    yellow_led.toggle();
-    gred_led.toggle();
-  });
-
-  while (1) {
-    STLIB::update();
-  }
-}
-#endif
-
-#ifdef TEST_12
-// Dereference a pointer to a non-accessible memory region (should compile fine, runtime error)
-int main(void) {
-  STLIB::start();
-
-  using myBoard = ST_LIB::Board<led1, led2, led3>;
-  myBoard::init();
-  auto &green_led = myBoard::instance_of<led1>();
-  auto &yellow_led = myBoard::instance_of<led2>();
-  auto &gred_led = myBoard::instance_of<led3>();
-
-  volatile uint32_t* invalid_ptr = reinterpret_cast<uint32_t*>(0x80000000); // Address outside of MPU regions
-
-  [[maybe_unused]] uint32_t value = *invalid_ptr; // Dereference
-
-  Time::register_low_precision_alarm(100, [&]() {
-    green_led.toggle();
-    yellow_led.toggle();
-    gred_led.toggle();
-  });
-
-  while (1) {
-    STLIB::update();
-  }
-}
-#endif
-
-#ifdef TEST_13
-// Try construct method
-struct MyStruct {
-  uint8_t a;
-  float b;
-  char c[10];
-  MyStruct(uint8_t aa, float bb) : a(aa), b(bb) { for (int i = 0; i < 10; ++i) c[i] = 'A' + i; }
-};
-constexpr auto my_buff = MPUDomain::Buffer<MyStruct>();
-
-int main(void) {
-  STLIB::start();
-
-  using myBoard = ST_LIB::Board<led1, led2, led3, my_buff>;
-  myBoard::init();
-  auto &green_led = myBoard::instance_of<led1>();
-  auto &yellow_led = myBoard::instance_of<led2>();
-  auto &gred_led = myBoard::instance_of<led3>();
-
-  [[maybe_unused]] auto my_buffer = myBoard::instance_of<my_buff>().template construct<my_buff>(42, 3.14f);
-
-  Time::register_low_precision_alarm(100, [&]() {
-    green_led.toggle();
-    yellow_led.toggle();
-    gred_led.toggle();
-  });
-
-  while (1) {
-    STLIB::update();
-  }
-}
-#endif
-
-#ifdef TEST_14
-// Test legacy MPUManager compatibility
-int main(void) {
-  STLIB::start();
-
-  using myBoard = ST_LIB::Board<led1, led2, led3>;
-  myBoard::init();
-  auto &green_led = myBoard::instance_of<led1>();
-  auto &yellow_led = myBoard::instance_of<led2>();
-  auto &gred_led = myBoard::instance_of<led3>();
-
-  [[maybe_unused]] auto my_buff = MPUManager::allocate_non_cached_memory(256);
-
-  Time::register_low_precision_alarm(100, [&]() {
-    green_led.toggle();
-    yellow_led.toggle();
-    gred_led.toggle();
-  });
-
-  while (1) {
-    STLIB::update();
-  }
-}
-#endif
-
-#ifdef TEST_15
-// Dereference a nullptr (should compile fine, runtime error)
-int main(void) {
-  STLIB::start();
-
-  using myBoard = ST_LIB::Board<led1, led2, led3>;
-  myBoard::init();
-  auto &green_led = myBoard::instance_of<led1>();
-  auto &yellow_led = myBoard::instance_of<led2>();
-  auto &gred_led = myBoard::instance_of<led3>();
-
-  volatile uint32_t* invalid_ptr = nullptr; // Null pointer
-
-  [[maybe_unused]] uint32_t value = *invalid_ptr; // Dereference
-
-  Time::register_low_precision_alarm(100, [&]() {
-    green_led.toggle();
-    yellow_led.toggle();
-    gred_led.toggle();
-  });
-
-  while (1) {
-    STLIB::update();
-  }
-}
-#endif
 
 void Error_Handler(void) {
   ErrorHandler("HAL error handler triggered");
