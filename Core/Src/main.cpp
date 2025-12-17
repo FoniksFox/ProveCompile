@@ -137,7 +137,7 @@ int main(void) {
 
 #ifdef TEST_5
 // Write, Read, Write, Read multiple times
-constexpr auto sd_card = SdDomain::SdCard<4>{
+constexpr auto sd_card = SdDomain::SdCard<15>{
     SdDomain::Peripheral::sdmmc1,
     std::pair{DigitalInputDomain::DigitalInput{ST_LIB::PG4}, GPIO_PinState::GPIO_PIN_RESET},
     std::pair{DigitalInputDomain::DigitalInput{ST_LIB::PG3}, GPIO_PinState::GPIO_PIN_SET},
@@ -157,11 +157,11 @@ int main(void) {
     (*current_buffer)[i] = i;
   }
 
-  for (uint32_t iteration = 0; iteration < 10; iteration++) {
+  for (uint32_t iteration = 0; iteration < 100; iteration++) {
     bool read_complete = false;
     bool write_complete = false;
     while (sd_instance.is_busy()) {}
-    sd_instance.write_blocks(0, 4, &write_complete);
+    while(!sd_instance.write_blocks(0, 15, &write_complete)) {}
     while (!write_complete) {
         STLIB::update();
     }
@@ -171,8 +171,11 @@ int main(void) {
     } 
 
     current_buffer = sd_instance.get_current_buffer();
+    for (size_t i = 0; i < current_buffer->size(); i++) {
+      (*current_buffer)[i] = 0xFF;
+    }
     while (sd_instance.is_busy()) {}
-    sd_instance.read_blocks(0, 4, &read_complete);
+    while(!sd_instance.read_blocks(0, 15, &read_complete)) {}
     while (!read_complete) {
       STLIB::update();
     }
