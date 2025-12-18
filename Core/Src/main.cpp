@@ -15,7 +15,7 @@ using ST_LIB::SdDomain;
 
 
 
-#define TEST_1
+#define TEST_2
 
 
 #ifdef TEST_0
@@ -144,6 +144,69 @@ int main(void) {
     while (!read_complete_flag);
     read_complete_flag = false;
     while (!sd.read_blocks(i, 4, &read_complete_flag));
+    while (!read_complete_flag);
+    read_complete_flag = false;
+  }
+
+  while (1) {
+    STLIB::update();
+    sd_logger.update();
+  }
+}
+#endif
+
+#ifdef TEST_2
+constexpr auto my_sd_card = SdDomain::SdCard<1>{
+  SdDomain::Peripheral::sdmmc1,
+  std::pair{DigitalInputDomain::DigitalInput{ST_LIB::PG4}, GPIO_PinState::GPIO_PIN_RESET},
+  std::pair{DigitalInputDomain::DigitalInput{ST_LIB::PG3}, GPIO_PinState::GPIO_PIN_SET},
+};
+
+constexpr auto my_var_0 = MPUDomain::Buffer<uint8_t>{};
+constexpr auto my_var_1 = MPUDomain::Buffer<uint16_t>{};
+
+constexpr auto my_packet_0 = MdmaPacketDomain::MdmaPacket<uint8_t>::Request{};
+constexpr auto my_packet_1 = MdmaPacketDomain::MdmaPacket<uint16_t>::Request{};
+int main(void) {
+  STLIB::start();
+
+  using myBoard = ST_LIB::Board<my_sd_card,
+                                my_var_0, my_var_1,
+                                my_packet_0, my_packet_1>;
+  myBoard::init();
+  
+  auto sd = SdDomain::SdCardWrapper<my_sd_card>(myBoard::instance_of<my_sd_card>());
+  auto var0 = myBoard::instance_of<my_var_0>().as<my_var_0>();
+  auto var1 = myBoard::instance_of<my_var_1>().as<my_var_1>();
+  auto packet0 = MdmaPacketDomain::MdmaPacket<uint8_t>(
+      myBoard::instance_of<my_packet_0>(), 1, var0);
+  auto packet1 = MdmaPacketDomain::MdmaPacket<uint16_t>(
+      myBoard::instance_of<my_packet_1>(), 2, var1);
+  
+  SdLogger sd_logger(sd);
+  auto p0 = sd_logger.add_packet(&packet0);
+  auto p1 = sd_logger.add_packet(&packet1);
+
+  *var0 = 0xFF;
+  *var1 = 0xABAB;
+
+  uint32_t iterations = 10000;
+  while (iterations--) {
+    STLIB::update();
+    sd_logger.update();
+
+    sd_logger.log(p0);
+
+    sd_logger.log(p1);
+  }
+
+  [[maybe_unused]] auto current_buffer = sd.get_current_buffer();
+  bool read_complete_flag = false;
+  for (size_t i = 0; i < (sd_logger.get_current_block() / 2); i++) {
+    while (!sd.read_blocks(i, 1, &read_complete_flag));
+    while (!read_complete_flag);
+    read_complete_flag = false;
+    while (!sd.read_blocks(i, 1, &read_complete_flag));
     while (!read_complete_flag);
     read_complete_flag = false;
   }
