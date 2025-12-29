@@ -37,6 +37,14 @@ SPI_HandleTypeDef hspi3;
 FDCAN_HandleTypeDef hfdcan1;
 FMAC_HandleTypeDef hfmac;
 
+
+/************************************************
+ *             	 		MPU
+ ***********************************************/
+
+MPUManager::config MPUManager::MPUConfig = {};
+
+
 /************************************************
  *              Communication-FDCAN
  ***********************************************/
