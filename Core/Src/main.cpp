@@ -20,7 +20,7 @@ constexpr DigitalOutputDomain::DigitalOutput led3{ST_LIB::PB14};
 #ifdef TEST_0
 // No Buffers requested
 int main(void) {
-  STLIB::start();
+    STLIB::start();
 
   using myBoard = ST_LIB::Board<led1, led2, led3>;
   myBoard::init();
@@ -33,6 +33,8 @@ int main(void) {
     yellow_led.toggle();
     gred_led.toggle();
   });
+
+  green_led.turn_on();
 
   while (1) {
     STLIB::update();
@@ -351,7 +353,6 @@ int main(void) {
   auto &gred_led = myBoard::instance_of<led3>();
 
   [[maybe_unused]] auto my_buffer = myBoard::instance_of<my_buff>().template as<my_buff>();
-
   Time::register_low_precision_alarm(100, [&]() {
     green_led.toggle();
     yellow_led.toggle();
@@ -373,7 +374,11 @@ constexpr auto my_buff4 = MPUDomain::Buffer<uint64_t[2]>();
 constexpr auto my_buff5 = MPUDomain::Buffer<uint32_t>(MPUDomain::MemoryType::Cached);
 constexpr auto my_buff6 = MPUDomain::Buffer<uint8_t[7]>(MPUDomain::MemoryType::Cached);
 constexpr auto my_buff7 = MPUDomain::Buffer<uint16_t>(MPUDomain::MemoryType::Cached);
-constexpr auto my_buff8 = MPUDomain::Buffer<uint32_t[3]>(MPUDomain::MemoryType::Cached, MPUDomain::MemoryDomain::D2, true);
+constexpr auto my_buff8 = MPUDomain::Buffer<uint32_t[3]>(MPUDomain::MemoryType::Cached, MPUDomain::MemoryDomain::D1, true);
+D1_NC uint32_t my_global_var;
+D2_C uint32_t my_global_var2;
+D3_NC uint32_t my_global_var3;
+D3_NC uint8_t my_global_array[50];
 
 int main(void) {
   STLIB::start();
@@ -393,6 +398,10 @@ int main(void) {
   [[maybe_unused]] auto my_buffer6 = myBoard::instance_of<my_buff6>().template as<my_buff6>();
   [[maybe_unused]] auto my_buffer7 = myBoard::instance_of<my_buff7>().template as<my_buff7>();
   [[maybe_unused]] auto my_buffer8 = myBoard::instance_of<my_buff8>().template as<my_buff8>();
+  [[maybe_unused]] auto* global_var1 = &my_global_var;
+  [[maybe_unused]] auto* global_var2 = &my_global_var2;
+  [[maybe_unused]] auto* global_var3 = &my_global_var3;
+  [[maybe_unused]] auto* global_array = &my_global_array;
 
   Time::register_low_precision_alarm(100, [&]() {
     green_led.toggle();
@@ -468,6 +477,7 @@ int main(void) {
 
 #ifdef TEST_14
 // Test legacy MPUManager compatibility
+D3_NC uint8_t my_legacy_buffer[256];
 int main(void) {
   STLIB::start();
 
@@ -478,6 +488,7 @@ int main(void) {
   auto &gred_led = myBoard::instance_of<led3>();
 
   [[maybe_unused]] auto my_buff = MPUManager::allocate_non_cached_memory(256);
+  [[maybe_unused]] auto legacy_buffer_ptr = my_legacy_buffer;
 
   Time::register_low_precision_alarm(100, [&]() {
     green_led.toggle();
