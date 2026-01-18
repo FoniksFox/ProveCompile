@@ -14,7 +14,7 @@ constexpr DigitalOutputDomain::DigitalOutput led3{ST_LIB::PB14};
 
 
 
-#define TEST_0
+#define TEST_11
 
 
 #ifdef TEST_0
@@ -82,7 +82,7 @@ int main(void) {
   auto &yellow_led = myBoard::instance_of<led2>();
   auto &gred_led = myBoard::instance_of<led3>();
 
-  [[maybe_unused]] auto my_buffer = myBoard::instance_of<my_uint32_t>().template as<my_uint32_t>();
+  [[maybe_unused]] auto my_buffer = MPUDomain::as<myBoard, my_uint32_t>();
 
   Time::register_low_precision_alarm(100, [&]() {
     green_led.toggle();
